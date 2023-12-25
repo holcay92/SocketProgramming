@@ -23,7 +23,6 @@ def gateway_program():
     last_temp_received_time = current_time()
     last_humidity_received_time = current_time()
 
-
     try:
         tcp_conn, tcp_address = gateway_tcp_socket.accept()
         print("Connection from Sensor (TCP): " + str(tcp_address))
@@ -43,20 +42,24 @@ def gateway_program():
         while True:
             # Use select to wait for either the TCP or UDP socket to be ready
             ready, _, _ = select.select([tcp_conn, gateway_udp_socket], [], [], 3)
-            if not ready:
-                # Timeout occurred, handle accordingly
-
+            print(f"ready {ready}")
+            ready_tcp, _, _ = select.select([tcp_conn], [], [], 3)
+            print(f"ready_tcp {ready_tcp}")
+            if not ready_tcp:
                 # Check temperature sensor inactivity
                 if current_time() - last_temp_received_time > timedelta(seconds=3):
-                    server_socket.send("TEMP SENSOR OFF".encode())
+                    formatted_timestamp = datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S')
+                    sensor_off_message = f"TEMP SENSOR OFF - {formatted_timestamp}"
+                    server_socket.send(sensor_off_message.encode())
 
+            ready_udp, _, _ = select.select([gateway_udp_socket], [], [], 3)
+            print(f"ready_udp {ready_udp}")
+            if not ready_udp:
                 # Check humidity sensor inactivity
                 if current_time() - last_humidity_received_time > timedelta(seconds=7):
-                    server_socket.send("HUMIDITY SENSOR OFF".encode())
-                print(current_time(), last_humidity_received_time)
-                # Reset timers
-                #last_temp_received_time = current_time()
-                #last_humidity_received_time = current_time()
+                    formatted_timestamp = datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S')
+                    sensor_off_message = f"HUMIDITY SENSOR OFF - {formatted_timestamp}"
+                    server_socket.send(sensor_off_message.encode())
 
                 continue  # Continue waiting for sockets
 
@@ -73,7 +76,7 @@ def gateway_program():
                     last_temp_received_time = current_time()
                     # Forward the temperature data to the server
                     server_socket.send(temperature_data.encode())
-                    #print("Temperature data forwarded to Server: " + str(temperature_data))
+                    # print("Temperature data forwarded to Server: " + str(temperature_data))
 
                 elif ready_socket is gateway_udp_socket:
                     # Receive humidity data from the sensor via UDP
@@ -87,7 +90,7 @@ def gateway_program():
                     last_humidity_received_time = current_time()
                     # Forward the humidity data to the server
                     server_socket.send(humidity_data)
-                    #print("Humidity data forwarded to Server: " + str(humidity_data))
+                    # print("Humidity data forwarded to Server: " + str(humidity_data))
 
     except Exception as e:
         print(f"An error occurred: {e}")
@@ -96,6 +99,7 @@ def gateway_program():
         gateway_udp_socket.close()
         server_socket.close()
         gateway_tcp_socket.close()
+
 
 if __name__ == '__main__':
     gateway_program()
